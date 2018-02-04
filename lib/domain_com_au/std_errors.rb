@@ -1,0 +1,2 @@
+module StdErrors
+end
