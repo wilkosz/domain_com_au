@@ -1,32 +1,87 @@
+require 'domain_com_au/constants'
 require 'net/http'
+require 'json'
+require 'base64'
+require 'time'
 
 class HttpClient
-  @token
+  attr_accessor :auth_token
 
-  def update_token(token)
-    @token = token
+  def initialize(client_id, client_secret)
+    @client_id = client_id
+    @client_secret = client_secret
+    @headers = {
+      ContentType: 'application/json'
+    }
+    authorize
   end
 
-  def post(uri, params)
+  def post(uri, params={}, headers={})
+    authorize if @auth_token && is_token_expired?
     check_uri(uri)
     req = Net::HTTP::Post.new(uri)
-    req.body = params.to_json if params
+    set_headers(req, headers)
+    set_body(req, params)
     http_response(uri, req)
   end
 
-  def get(uri, params)
+  def get(uri)
+    authorize if @auth_token && is_token_expired?
     check_uri(uri)
-    uri.query = URI.encode_www_form(params)
     req = Net::HTTP::Get.new(uri)
     http_response(uri, req)
+  end
+
+  private
+
+  def is_token_expired?
+    @auth_expiry - 60 <= DateTime.now # add request buffer
   end
 
   def check_uri(uri)
     raise ArgumentError.new('Uri cannot be nil') unless uri
   end
 
+  def set_headers(req, headers)
+    req['Authorization'] = "#{@auth_type} #{@auth_token}" if @auth_token && @auth_type
+    @headers.each { |key, value| req[key.to_sym] = value }
+    headers.each { |key, value| req[key.to_sym] = value } if headers.class == Hash
+  end
+
+  def set_body(req, params)
+    req.body = case req[:ContentType]
+      when 'application/x-www-form-urlencoded' then URI.encode_www_form(params)
+      when 'application/json' then params && params.to_json
+      else nil
+      end
+  end
+
   def http_response(uri, req)
     return unless uri.hostname && uri.port
-    Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(req) }
+    Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') { |http| http.request(req) }
+  end
+
+  def authorize
+    uri = URI("#{Constants::BASE_AUTH_URL}/connect/token")
+    base_64_credentials = Base64.strict_encode64("#{@client_id}:#{@client_secret}")
+    params = {
+      grant_type: "client_credentials",
+      scope: "api_listings_read api_agencies_read"
+    }
+    headers = {
+      Authorization: "basic #{base_64_credentials}",
+      ContentType: "application/x-www-form-urlencoded"
+    }
+    time_now = Time.now
+    res = post(uri, params, headers)
+
+    if res.code && res.code.to_i == 200
+      body = JSON.parse(res.body)
+      @auth_token = body['access_token']
+      @auth_type = body['token_type']
+      @auth_expiry = time_now + body['expires_in']
+    else
+      raise ArgumentError.new("Domain Auth API didn't return a token, body: #{res.body}, status: #{res.code}")
+    end
   end
 end

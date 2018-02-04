@@ -1,7 +1,9 @@
-class DomainListing
-  @route = '/listing'
 
-  def index
+module DomainListing
+  @route = 'listings/_type_/_search'
+
+  def index(http_client, type='residential', params={})
+
   end
 
   def show
