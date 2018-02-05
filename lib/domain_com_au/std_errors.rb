@@ -1,2 +1,0 @@
-module StdErrors
-end

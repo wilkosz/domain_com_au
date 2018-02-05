@@ -13,4 +13,8 @@ class Client
   def search_listings(type, params={})
     DomainListing.index(@http_client, type, params)
   end
+
+  def show_listing(id)
+    DomainListing.show(@http_client, id)
+  end
 end
