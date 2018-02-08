@@ -13,6 +13,7 @@ class HttpClient
     @headers = {
       'content-type': 'application/json'
     }
+    # @auth_action = true
     authorize
   end
 
@@ -61,7 +62,16 @@ class HttpClient
 
   def http_response(uri, req)
     return unless uri.hostname && uri.port
-    Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') { |http| http.request(req) }
+    res = Net::HTTP.start(uri.hostname, uri.port, :use_ssl => uri.scheme == 'https') { |http| http.request(req) }
+    # if [401,403].include?(res.code.to_i) && @auth_action
+    #   raise StandardError.new("Couldn't Authenticate, res.body: #{res.body}, res.code: #{res.code}")
+    # elsif [401,403].include?(res.code.to_i)
+    #   authorize && @auth_action = true
+    #   set_headers(req, {})
+    #   res = http_response(uri, req)
+    # end
+    # @auth_action = false
+    res
   end
 
   def authorize
@@ -77,7 +87,7 @@ class HttpClient
     }
     time_now = Time.now
     res = post(uri, params, headers)
-    if res.code && res.code.to_i == 200
+    if res.body && res.code.to_i == 200
       body = JSON.parse(res.body)
       @auth_token = body['access_token']
       @auth_type = body['token_type']

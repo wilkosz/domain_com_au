@@ -14,5 +14,3 @@ require "pry"
 
 require "irb"
 IRB.start(__FILE__)
-
-puts "hello"
